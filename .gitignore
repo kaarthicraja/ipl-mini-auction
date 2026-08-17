@@ -1,1 +1,4 @@
+*.zip
 ipl-auction-arena-deploy.zip
+node_modules/
+server.log

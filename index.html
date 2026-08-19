@@ -676,8 +676,17 @@ async function actionPickTeam(teamId){
 }
 async function actionStartRetention(){
   await mutateRoom(S.roomCode, st=>{
-    if(!st.managers.every(m=>m.team)) return false;
-    st.phase="retention"; return st;
+    const taken = new Set(Object.values(st.teamsTaken));
+    const availTeams = TEAMS.filter(t=>!taken.has(t.id)).map(t=>t.id);
+    st.managers.forEach(m=>{
+      if(!m.team && availTeams.length > 0){
+        const randTeam = availTeams.shift();
+        m.team = randTeam;
+        st.teamsTaken[randTeam] = m.id;
+      }
+    });
+    st.phase="retention";
+    return st;
   });
 }
 async function actionRetainPlayer(playerId){
@@ -1006,6 +1015,7 @@ function renderLobby(){
 function renderTeamSelect(){
   const r=S.room; const me=myManager();
   const allPicked = r.managers.every(m=>m.team);
+  const hostHasTeam = me && me.team;
   app.innerHTML = renderTopbar() + `
   <div class="main">
     <div class="phase-pill">Team Selection</div>
@@ -1035,7 +1045,7 @@ function renderTeamSelect(){
       <div class="section-title">Managers</div>
       ${r.managers.map(m=>`<div class="player-row"><div class="left"><span class="dot ${isConnected(m)?'on':'off'}"></span>${m.name}${m.id===S.myId?' <span class="tagpill tag-you">You</span>':''}</div>
         <div style="font-weight:700;color:${m.team?teamById(m.team).primary:'#5c6779'};">${m.team||'Choosing…'}</div></div>`).join("")}
-      ${amHost()?`<button class="btn btn-gold btn-block" style="margin-top:14px;" id="btnStartRet" ${allPicked?'':'disabled'}>Start Retention${allPicked?'':' (waiting for teams)'}</button>`:''}
+      ${amHost()?`<button class="btn btn-gold btn-block" style="margin-top:14px;" id="btnStartRet" ${hostHasTeam?'':'disabled'}>Start Retention${hostHasTeam?(allPicked?'':' (auto-assigns remaining teams)'):' (pick your team first)'}</button>`:''}
     </div>
   </div>`;
   document.querySelectorAll(".team-card").forEach(el=>{
@@ -1047,7 +1057,10 @@ function renderTeamSelect(){
       actionPickTeam(t);
     };
   });
-  if(amHost() && allPicked) document.getElementById("btnStartRet").onclick=actionStartRetention;
+  const btnStartRet = document.getElementById("btnStartRet");
+  if(amHost() && btnStartRet && hostHasTeam) {
+    btnStartRet.onclick = actionStartRetention;
+  }
 }
 
 /* ============================================================
@@ -1055,14 +1068,16 @@ function renderTeamSelect(){
    ============================================================ */
 function renderRetention(){
   const r=S.room; const me=myManager();
-  const myRetained = me.squad.filter(s=>s.retained);
+  const meTeamId = (me && me.team) ? me.team : TEAMS[0].id;
+  const meTeamObj = teamById(meTeamId) || TEAMS[0];
+  const myRetained = me ? me.squad.filter(s=>s.retained) : [];
   const doneCount = r.managers.filter(m=>m.squad.filter(s=>s.retained).length>=RETENTION_SLOTS).length;
   const allDone = doneCount===r.managers.length;
   const roleFilter = S._retRole||"ALL";
   const searchQ = (S._retSearch||"").trim().toLowerCase();
   
-  // Filter available pool to ONLY players belonging to me.team (2025 team lock)
-  let avail = r.pool.filter(p=>p.status==="available" && (!p.team2025 || p.team2025===me.team));
+  // Filter available pool to ONLY players belonging to meTeamId (2025 team lock)
+  let avail = r.pool.filter(p=>p.status==="available" && (!p.team2025 || p.team2025===meTeamId));
   if(roleFilter!=="ALL") avail = avail.filter(p=>p.role===roleFilter);
   if(searchQ) avail = avail.filter(p=>
     p.name.toLowerCase().includes(searchQ) ||
@@ -1077,8 +1092,8 @@ function renderRetention(){
     <div class="card" style="margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
         <div>
-          <div class="section-title" style="margin-bottom:2px;">${teamById(me.team).name} — ${me.name}</div>
-          <div class="faint">Only 2025 <b>${teamById(me.team).name}</b> players can be retained · Retention Slots ${myRetained.length} / ${RETENTION_SLOTS}</div>
+          <div class="section-title" style="margin-bottom:2px;">${meTeamObj.name} — ${me?me.name:'Manager'}</div>
+          <div class="faint">Only 2025 <b>${meTeamObj.name}</b> players can be retained · Retention Slots ${myRetained.length} / ${RETENTION_SLOTS}</div>
         </div>
         <div class="stat-row" style="max-width:340px;">
           <div class="stat-box"><div class="num">₹120</div><div class="lbl">Starting Purse</div></div>
@@ -1093,7 +1108,7 @@ function renderRetention(){
 
     <div class="card">
       <div class="pool-toolbar">
-        <div class="section-title" style="margin:0;flex:1;">Available Players for ${me.team}</div>
+        <div class="section-title" style="margin:0;flex:1;">Available Players for ${meTeamObj.name}</div>
         <input type="text" id="retSearch" placeholder="Search players…" style="width:180px;font-family:'Inter',sans-serif;letter-spacing:normal;" value="${S._retSearch||''}">
         <select id="retRole">
           <option value="ALL" ${roleFilter==='ALL'?'selected':''}>All Roles</option>
@@ -1110,9 +1125,9 @@ function renderRetention(){
 
     <div class="card" style="margin-top:16px;">
       <div class="section-title">Retention Progress</div>
-      ${r.managers.map(m=>`<div class="player-row"><div class="left"><span class="dot ${isConnected(m)?'on':'off'}"></span>${m.name} <span class="faint">(${m.team})</span></div>
+      ${r.managers.map(m=>`<div class="player-row"><div class="left"><span class="dot ${isConnected(m)?'on':'off'}"></span>${m.name} <span class="faint">(${m.team||'None'})</span></div>
         <div class="mono" style="font-weight:700;color:${m.squad.filter(s=>s.retained).length>=3?'#3ddc84':'#9aa5b4'};">${m.squad.filter(s=>s.retained).length}/3</div></div>`).join("")}
-      ${amHost()?`<button class="btn btn-gold btn-block" style="margin-top:14px;" id="btnStartAuc" ${allDone?'':'disabled'}>Start Auction${allDone?'':' (waiting for retentions)'}</button>`:''}
+      ${amHost()?`<button class="btn btn-gold btn-block" style="margin-top:14px;" id="btnStartAuc">Start Auction${allDone?'':' (can skip remaining)'}</button>`:''}
     </div>
   </div>`;
 
@@ -1132,7 +1147,10 @@ function renderRetention(){
   document.querySelectorAll("[data-unretain]").forEach(el=>{
     el.onclick=()=>actionUndoRetain(el.dataset.unretain);
   });
-  if(amHost() && allDone) document.getElementById("btnStartAuc").onclick=actionStartAuction;
+  const btnStartAuc = document.getElementById("btnStartAuc");
+  if(amHost() && btnStartAuc) {
+    btnStartAuc.onclick = actionStartAuction;
+  }
 }
 function renderMiniPlayerCard(s, showUnretain){
   return `<div class="pcard">

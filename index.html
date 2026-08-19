@@ -171,7 +171,7 @@ select{
 select option{
   background-color:#161c28 !important; color:#ffffff !important; padding:10px; font-weight:600;
 }
-.pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;max-height:520px;overflow-y:auto;padding-right:4px;}
+.pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;max-height:700px;overflow-y:auto;padding-right:4px;}
 .pgrid-scroll::-webkit-scrollbar{width:6px;}
 .pgrid-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:10px;}
 .pcard{
@@ -366,9 +366,11 @@ const RAW_PLAYERS = [
   ["Akash Deep","India",0,"BOWLER",79,"LSG"],["Prince Yadav","India",0,"BOWLER",70,"LSG"],["Digvesh Singh","India",0,"BOWLER",69,"LSG"],
 ];
 
+// Deduplicate by name (keep first occurrence)
+const _seenNames = new Set();
 const PLAYERS = RAW_PLAYERS.map((p,i)=>({
   id:"p"+(i+1), name:p[0], country:p[1], isOverseas:!!p[2], role:p[3], rating:p[4], basePrice:2, team2025:p[5]||null
-}));
+})).filter(p=>{ if(_seenNames.has(p.name)) return false; _seenNames.add(p.name); return true; });
 
 const TEAMS = [
   {id:"CSK",name:"Chennai Super Kings",primary:"#f9cd05",secondary:"#0b1f3a",text:"#0b1f3a"},
@@ -385,7 +387,7 @@ const TEAMS = [
 const teamById = id => TEAMS.find(t=>t.id===id);
 
 const ROLE_LABEL = {BATTER:"Batter",BOWLER:"Bowler",ALL_ROUNDER:"All-Rounder",WICKETKEEPER:"Wicketkeeper"};
-const MAX_SQUAD=28, MAX_OVERSEAS=8, RETENTION_SLOTS=3, START_PURSE=120;
+const MAX_SQUAD=28, MAX_OVERSEAS=8, RETENTION_SLOTS=3, START_PURSE=120, MAX_MANAGERS=9;
 
 function fmtCr(n){
   n = Math.round(n*100)/100;
@@ -659,15 +661,19 @@ function finalizeCurrentPlayer(st){
 function advanceToNextPlayer(st){
   const a = st.auction;
   if(a.status==="live") return false;
+  if(allSquadsFull(st)){
+    a.status="roundEnd"; a.currentPlayerId=null; a.currentBidderId=null;
+    return st;
+  }
   a.idx += 1;
   if(a.idx >= a.order.length){
     a.status="roundEnd"; a.currentPlayerId=null; a.currentBidderId=null;
     return st;
   }
   const pid = a.order[a.idx];
-  const pool = st.pool.find(p=>p.id===pid);
-  if(!pool || pool.status!=="available"){ // safety: skip stale entries
-    a.idx += 0; // will be retried next tick via recursion guard below
+  const pool = st.pool.find(p=>p&&p.id===pid);
+  const noMoreOverseas = allOverseasFull(st);
+  if(!pool || pool.status!=="available" || (pool.isOverseas && noMoreOverseas)){
     return advanceToNextPlayer2(st);
   }
   pool.status="inAuction";
@@ -679,10 +685,19 @@ function advanceToNextPlayer(st){
 function advanceToNextPlayer2(st){
   // helper used when the picked order slot is stale; scan forward for next available
   const a = st.auction;
+  const noMoreOverseas = allOverseasFull(st);
+  const noMoreSquadRoom = allSquadsFull(st);
+  // Auto-finish if all squads are full
+  if(noMoreSquadRoom){
+    a.status="roundEnd"; a.currentPlayerId=null; a.currentBidderId=null;
+    return st;
+  }
   while(a.idx < a.order.length){
     const pid = a.order[a.idx];
-    const pool = st.pool.find(p=>p.id===pid);
+    const pool = st.pool.find(p=>p&&p.id===pid);
     if(pool && pool.status==="available"){
+      // Skip overseas players if everyone has full overseas slots
+      if(pool.isOverseas && noMoreOverseas){ a.idx+=1; continue; }
       pool.status="inAuction";
       a.currentPlayerId=pid; a.currentBid=pool.basePrice; a.currentBidderId=null;
       a.endsAt=Date.now()+10000; a.status="live";
@@ -695,11 +710,18 @@ function advanceToNextPlayer2(st){
   return st;
 }
 
+function allOverseasFull(st){
+  // Returns true only when EVERY manager has hit MAX_OVERSEAS
+  return st.managers.every(m=>(m.squad||[]).filter(s=>s&&s.isOverseas).length >= MAX_OVERSEAS);
+}
+function allSquadsFull(st){
+  return st.managers.every(m=>(m.squad||[]).length >= MAX_SQUAD);
+}
 function canBid(mgr, pool, bidAmt){
   if(!mgr || !pool) return {ok:false,reason:"n/a"};
   if(mgr.squad.length >= MAX_SQUAD) return {ok:false,reason:`Squad full (${MAX_SQUAD}/${MAX_SQUAD})`};
   if(pool.isOverseas){
-    const overseasCount = mgr.squad.filter(s=>s.isOverseas).length;
+    const overseasCount = mgr.squad.filter(s=>s&&s.isOverseas).length;
     if(overseasCount >= MAX_OVERSEAS) return {ok:false,reason:`Overseas limit reached (${MAX_OVERSEAS}/${MAX_OVERSEAS})`};
   }
   if(mgr.purse < bidAmt) return {ok:false,reason:"Insufficient purse"};
@@ -725,7 +747,7 @@ async function actionJoinRoom(code, name){
   const id = slug(name);
   let existing = room.managers.find(m=>m.id===id);
   if(!existing){
-    if(room.managers.length>=4){ S.joinErr="Room is full (4/4 managers)."; render(); return; }
+    if(room.managers.length>=MAX_MANAGERS){ S.joinErr=`Room is full (${MAX_MANAGERS}/${MAX_MANAGERS} managers).`; render(); return; }
     if(room.phase!=="lobby"){ S.joinErr="Game already in progress — ask the host for the exact name you used, or wait for the next game."; render(); return; }
     room.managers.push(newManager(id,name.trim(),false));
     await saveRoom(code, room);
@@ -825,8 +847,19 @@ async function actionUndoRetain(playerId){
 }
 async function actionStartAuction(){
   await mutateRoom(S.roomCode, st=>{
-    const available = st.pool.filter(p=>p.status==="available").map(p=>p.id);
-    st.auction.order = shuffle(available);
+    // Build alternating Indian/Foreign order for fairness
+    const availablePool = st.pool.filter(p=>p.status==="available");
+    const indian = shuffle(availablePool.filter(p=>!p.isOverseas).map(p=>p.id));
+    const foreign = shuffle(availablePool.filter(p=>p.isOverseas).map(p=>p.id));
+    // Interleave: foreign, indian, foreign, indian... (1 foreign every 2 players)
+    const ordered = [];
+    let fi=0, ii=0;
+    while(fi<foreign.length || ii<indian.length){
+      if(fi<foreign.length) ordered.push(foreign[fi++]);
+      if(ii<indian.length) ordered.push(indian[ii++]);
+      if(ii<indian.length) ordered.push(indian[ii++]); // extra indian to balance
+    }
+    st.auction.order = ordered;
     st.auction.idx = -1;
     st.auction.round="main";
     st.phase="auction";
@@ -1400,11 +1433,11 @@ function renderAuction(){
         </div>
 
         <div class="section-title" style="margin-top:18px;display:flex;justify-content:space-between;align-items:center;">
-          <span>All Players (${r.pool.length})</span>
+          <span>All Players (${r.pool.filter(p=>p&&p.status==="available").length} avail / ${r.pool.filter(p=>p).length} total)</span>
         </div>
         <input type="text" id="aucPoolSearch" placeholder="Filter pool player..." value="${S._aucPoolSearch || ''}" style="width:100%;margin-bottom:8px;padding:7px 10px;font-size:12px;background:#161c28;border:1px solid var(--glass-brd);border-radius:8px;color:#fff;" />
         <div class="side-pool-list pgrid-scroll" style="max-height:260px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:10px;padding:6px;border:1px solid var(--glass-brd);">
-          ${aucPoolList.map(p => {
+          ${aucPoolList.filter(p=>p!=null).map(p => {
             let badgeStyle = "background:rgba(79,209,255,0.15);color:var(--flood);";
             let statusLabel = "Available";
             if(p.status === "inAuction") { badgeStyle="background:rgba(232,185,74,0.2);color:var(--gold-2);"; statusLabel="In Auction"; }
@@ -1478,6 +1511,37 @@ function renderAuction(){
             </div>
           </div>
         </div>
+
+        <!-- Squad viewer: tabs for each manager's squad -->
+        <div class="mybid-panel" style="margin-top:12px;">
+          <div class="section-title" style="margin-bottom:8px;">All Team Squads</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+            ${r.managers.map(m=>{
+              const t=teamById(m.team)||{primary:'var(--gold)'};
+              const active=(S._squadTab||r.managers[0].id)===m.id;
+              return `<button data-squadtab="${m.id}" style="padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid ${active?t.primary:'var(--glass-brd)'};background:${active?'rgba(255,255,255,0.08)':'transparent'};color:${active?t.primary:'var(--ink-dim)'};cursor:pointer;font-weight:700;">${m.team}</button>`;
+            }).join("")}
+          </div>
+          ${(()=>{
+            const viewMgr = r.managers.find(m=>m.id===(S._squadTab||r.managers[0].id)) || r.managers[0];
+            const vt = teamById(viewMgr.team)||{};
+            const ovs = (viewMgr.squad||[]).filter(s=>s&&s.isOverseas).length;
+            return `<div style="font-size:11px;color:var(--ink-faint);margin-bottom:6px;">${viewMgr.name} · ${(viewMgr.squad||[]).length}/${MAX_SQUAD} players · ${ovs}/${MAX_OVERSEAS} overseas · ${fmtCr(viewMgr.purse)} purse</div>
+            <div style="max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:8px;padding:4px;">
+              ${(viewMgr.squad||[]).filter(s=>s).map(s=>
+                `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:11px;">
+                  <div><span style="font-weight:700;">${s.name}</span> ${flag(s.country)}</div>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <span style="font-size:10px;color:var(--ink-faint);">${ROLE_LABEL[s.role]}</span>
+                    ${s.retained?'<span style="font-size:9px;color:var(--gold-2);font-weight:800;">RET</span>':''}
+                    ${s.isOverseas?'<span style="font-size:9px;color:var(--flood);font-weight:800;">OVS</span>':''}
+                    <span style="font-size:10px;color:var(--good);">${s.retained?'Free':fmtCr(s.price)}</span>
+                  </div>
+                </div>`
+              ).join("") || '<div style="padding:10px;color:var(--ink-faint);font-size:11px;text-align:center;">No players yet</div>'}
+            </div>`;
+          })()}
+        </div>
       </div>
 
       <div class="side-panel">
@@ -1504,8 +1568,29 @@ function renderAuction(){
       render();
     };
   }
+  // Squad tab switching
+  document.querySelectorAll("[data-squadtab]").forEach(el=>{
+    el.onclick=()=>{ S._squadTab=el.dataset.squadtab; render(); };
+  });
 
-  const bBid=document.getElementById("btnBid"); if(bBid) bBid.onclick=actionPlaceBid;
+  // Bid button — optimistic local update for instant feel, then server write
+  const bBid=document.getElementById("btnBid");
+  if(bBid) bBid.onclick=()=>{
+    // Optimistic: update local state immediately
+    const a2=S.room.auction;
+    const m2=myManager();
+    const p2=S.room.pool.find(p=>p&&p.id===a2.currentPlayerId);
+    const amt2=nextBidAmount(a2.currentBid);
+    if(a2.status==="live" && m2 && p2 && m2.id!==a2.currentBidderId && canBid(m2,p2,amt2).ok){
+      a2.currentBid=amt2; a2.currentBidderId=m2.id;
+      const now2=Date.now();
+      a2.endsAt=Math.min(now2+10000,(a2.endsAt||now2+10000)+1000);
+      if(!S.room.bidFeed) S.room.bidFeed=[];
+      S.room.bidFeed.unshift({manager:m2.name,team:m2.team,amount:amt2,time:now2});
+      render(); // instant UI update
+    }
+    actionPlaceBid(); // async server commit
+  };
   const bSkip=document.getElementById("btnSkip"); if(bSkip) bSkip.onclick=actionHostSkip;
   const bPause=document.getElementById("btnPause"); if(bPause) bPause.onclick=actionHostPause;
   const bResume=document.getElementById("btnResume"); if(bResume) bResume.onclick=actionHostResume;

@@ -741,35 +741,36 @@ async function actionPickTeam(teamId){
   if(S.room) maybeAutoAdvanceTeamSelect(S.room);
 }
 async function actionStartRetention(){
-  if(S.room){
+  // Optimistic local render so UI feels instant
+  if(S.room && S.room.phase !== "retention"){
     if(!S.room.teamsTaken) S.room.teamsTaken = {};
-    const taken = new Set(Object.values(S.room.teamsTaken||{}));
-    const availTeams = TEAMS.filter(t=>!taken.has(t.id)).map(t=>t.id);
+    const takenIds = new Set(Object.keys(S.room.teamsTaken));
+    const availTeams = TEAMS.filter(t=>!takenIds.has(t.id)).map(t=>t.id);
     S.room.managers.forEach(m=>{
       if(!m.team && availTeams.length > 0){
-        const randTeam = availTeams.shift();
-        m.team = randTeam;
-        S.room.teamsTaken[randTeam] = m.id;
+        const t = availTeams.shift();
+        m.team = t;
+        S.room.teamsTaken[t] = m.id;
       }
     });
-    // Bump version locally FIRST so poll loop won't regress us back
-    S.room.version = (S.room.version || 0) + 100; 
-    S.room.phase="retention";
+    S.room.phase = "retention";
+    S.room.version = (S.room.version || 0) + 50; // ensure regression guard holds
     render();
   }
+  // Authoritative server write
   await mutateRoom(S.roomCode, st=>{
-    if(st.phase === "retention") return st;
+    if(st.phase === "retention") return st; // already done, just sync
     if(!st.teamsTaken) st.teamsTaken = {};
-    const taken = new Set(Object.values(st.teamsTaken||{}));
-    const availTeams = TEAMS.filter(t=>!taken.has(t.id)).map(t=>t.id);
+    const takenIds = new Set(Object.keys(st.teamsTaken));
+    const availTeams = TEAMS.filter(t=>!takenIds.has(t.id)).map(t=>t.id);
     st.managers.forEach(m=>{
       if(!m.team && availTeams.length > 0){
-        const randTeam = availTeams.shift();
-        m.team = randTeam;
-        st.teamsTaken[randTeam] = m.id;
+        const t = availTeams.shift();
+        m.team = t;
+        st.teamsTaken[t] = m.id;
       }
     });
-    st.phase="retention";
+    st.phase = "retention";
     return st;
   });
 }
@@ -1099,35 +1100,34 @@ function renderLobby(){
 function renderTeamSelect(){
   const r=S.room; const me=myManager();
   const allPicked = r.managers.length > 0 && r.managers.every(m=>m.team);
-  const endsAt = r.teamSelectEndsAt || (Date.now() + 138000);
-  const msLeft = Math.max(0, endsAt - Date.now());
-  const timerStr = formatTimer(msLeft);
+  const myTeamPicked = !!(me && me.team);
+  const isHost = amHost();
+
+  // Host can always start; non-host sees waiting message
+  const canStartRetention = isHost && myTeamPicked;
 
   app.innerHTML = renderTopbar() + `
   <div class="main">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
-      <div class="phase-pill" style="margin:0;">Team Selection</div>
-      <div style="background:rgba(247,213,129,0.15);border:1px solid rgba(247,213,129,0.4);color:#f7d581;padding:6px 14px;border-radius:20px;font-weight:700;font-family:var(--font-mono);font-size:14px;display:flex;align-items:center;gap:6px;">
-        <span>⏳ Team Selection Timer:</span> <span id="teamSelTimerDisplay">${timerStr}</span>
-      </div>
-    </div>
+    <div class="phase-pill">Team Selection</div>
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Pick your IPL team</div>
-      <div class="dim" style="font-size:13px;margin-bottom:14px;">${me&&me.team? "You're locked in! Unpicked teams will be auto-assigned when timer expires or all managers pick." : "Tap a team to claim it within 2.3 minutes. Remaining teams will be auto-assigned."}</div>
+      <div class="dim" style="font-size:13px;margin-bottom:14px;">
+        ${myTeamPicked ? "You're locked in! Waiting for others or the host to start retention." : "Tap a team to claim it. Once picked, it's yours for the game."}
+      </div>
       <div class="team-grid">
         ${TEAMS.map(t=>{
-          const takenBy = r.teamsTaken[t.id];
+          const takenBy = r.teamsTaken ? r.teamsTaken[t.id] : null;
           const takenMgr = takenBy ? r.managers.find(m=>m.id===takenBy) : null;
           const mine = takenBy===S.myId;
           const disabled = !!takenBy && !mine;
           return `<div class="team-card ${takenBy?'taken':''} ${mine?'mine':''}" data-team="${t.id}"
-            style="background:linear-gradient(135deg, ${t.primary}22, ${t.secondary}33); ${disabled?'':'cursor:pointer;'}">
+            style="background:linear-gradient(135deg,${t.primary}22,${t.secondary}33);${disabled?'':'cursor:pointer;'}">
             <div>
               <div class="team-abbr" style="color:${t.primary};">${t.id}</div>
               <div class="team-name">${t.name}</div>
             </div>
             <div class="team-status" style="color:${mine?'#f7d581':(takenBy?'#ff8a97':'#3ddc84')};">
-              ${mine?'✓ Selected': takenBy? '🔒 Taken by '+(takenMgr?takenMgr.name:'Manager') : 'Available'}
+              ${mine?'✓ Selected': takenBy?'🔒 Taken by '+(takenMgr?takenMgr.name:'Manager'):'Available'}
             </div>
           </div>`;
         }).join("")}
@@ -1135,37 +1135,42 @@ function renderTeamSelect(){
     </div>
     <div class="card">
       <div class="section-title">Managers</div>
-      ${r.managers.map(m=>`<div class="player-row"><div class="left"><span class="dot ${isConnected(m)?'on':'off'}"></span>${m.name}${m.id===S.myId?' <span class="tagpill tag-you">You</span>':''}</div>
-        <div style="font-weight:700;color:${m.team?teamById(m.team).primary:'#5c6779'};">${m.team||'Choosing…'}</div></div>`).join("")}
-      <div class="dim" style="margin-top:14px;text-align:center;font-size:12.5px;color:#f7d581;">
-        ⚡ Retention round starts automatically when timer expires or all teams are picked!
+      ${r.managers.map(m=>`<div class="player-row">
+        <div class="left"><span class="dot ${isConnected(m)?'on':'off'}"></span>${m.name}${m.id===S.myId?' <span class="tagpill tag-you">You</span>':''}</div>
+        <div style="font-weight:700;color:${m.team?teamById(m.team).primary:'#5c6779'};">${m.team||'Choosing…'}</div>
+      </div>`).join("")}
+      <div style="margin-top:18px;">
+        ${isHost
+          ? `<button class="btn btn-gold btn-block" id="btnStartRet" ${canStartRetention?'':'disabled'}>
+               ${allPicked ? '✅ Start Retention' : (myTeamPicked ? '⚡ Start Retention (auto-assign remaining teams)' : '⚠️ Pick your team first')}
+             </button>
+             ${!myTeamPicked ? '<div class="dim" style="text-align:center;margin-top:8px;font-size:12px;">You must pick a team before starting retention.</div>' : ''}`
+          : `<div class="empty-state">Waiting for the host to start the retention round…</div>`
+        }
       </div>
     </div>
   </div>`;
+
+  // Wire team card clicks
   document.querySelectorAll(".team-card").forEach(el=>{
     el.onclick=()=>{
-      const t=el.dataset.team;
-      const takenBy=r.teamsTaken[t];
+      const t = el.dataset.team;
+      const takenBy = r.teamsTaken ? r.teamsTaken[t] : null;
       if(takenBy && takenBy!==S.myId) return;
       if(me && me.team) return;
       actionPickTeam(t);
     };
   });
-  if(S._teamSelectTimer) clearInterval(S._teamSelectTimer);
-  S._teamSelectTimer = setInterval(()=>{
-    const el = document.getElementById("teamSelTimerDisplay");
-    if(!el || !S.room || S.room.phase !== "teamselect") {
-      clearInterval(S._teamSelectTimer);
-      return;
-    }
-    const ends = S.room.teamSelectEndsAt || Date.now();
-    const left = Math.max(0, ends - Date.now());
-    el.textContent = formatTimer(left);
-    if(left <= 0){
-      clearInterval(S._teamSelectTimer);
-      maybeAutoAdvanceTeamSelect(S.room);
-    }
-  }, 500);
+
+  // Wire Start Retention button
+  const btnStartRet = document.getElementById("btnStartRet");
+  if(btnStartRet && !btnStartRet.disabled){
+    btnStartRet.onclick = async function(){
+      btnStartRet.disabled = true;
+      btnStartRet.textContent = "Starting…";
+      await actionStartRetention();
+    };
+  }
 }
 
 /* ============================================================

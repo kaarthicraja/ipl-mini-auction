@@ -164,8 +164,12 @@ a.link{color:var(--flood);text-decoration:none;}
 /* ---------- retention / pool ---------- */
 .pool-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
 select{
-  background:rgba(255,255,255,0.04);border:1px solid var(--glass-brd);color:var(--ink);
-  padding:9px 10px;border-radius:9px;font-size:12.5px;font-family:'Inter',sans-serif;
+  background:#161c28 !important; border:1px solid var(--gold) !important; color:#f7d581 !important;
+  padding:9px 12px; border-radius:9px; font-size:13px; font-weight:600; font-family:'Inter',sans-serif;
+  cursor:pointer; outline:none; box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+select option{
+  background-color:#161c28 !important; color:#ffffff !important; padding:10px; font-weight:600;
 }
 .pool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;max-height:520px;overflow-y:auto;padding-right:4px;}
 .pgrid-scroll::-webkit-scrollbar{width:6px;}
@@ -286,52 +290,32 @@ const RAW_PLAYERS = [
   ["Noor Ahmad","Afghanistan",1,"BOWLER",82,"CSK"],["Anshul Kamboj","India",0,"BOWLER",76,"CSK"],
   ["Mukesh Choudhary","India",0,"BOWLER",75,"CSK"],["Deepak Chahar","India",0,"BOWLER",80,"CSK"],
   ["Gurjapneet Singh","India",0,"BOWLER",71,"CSK"],["Jamie Overton","England",1,"ALL_ROUNDER",77,"CSK"],
-  ["Kamlesh Nagarkoti","India",0,"BOWLER",72,"CSK"],["Ramandeep Singh","India",0,"ALL_ROUNDER",76,"CSK"],
-  ["Shaik Rasheed","India",0,"BATTER",72,"CSK"],["Vansh Bedi","India",0,"BATTER",70,"CSK"],
-  ["Andre Siddarth","India",0,"BATTER",71,"CSK"],["C Andre Siddarth","India",0,"ALL_ROUNDER",70,"CSK"],
   ["Nathan Ellis","Australia",1,"BOWLER",79,"CSK"],
   // RCB (26-50)
   ["Virat Kohli","India",0,"BATTER",96,"RCB"],["Rajat Patidar","India",0,"BATTER",86,"RCB"],
   ["Yash Dayal","India",0,"BOWLER",78,"RCB"],["Liam Livingstone","England",1,"ALL_ROUNDER",85,"RCB"],
   ["Phil Salt","England",1,"WICKETKEEPER",87,"RCB"],["Jitesh Sharma","India",0,"WICKETKEEPER",81,"RCB"],
   ["Josh Hazlewood","Australia",1,"BOWLER",89,"RCB"],["Bhuvneshwar Kumar","India",0,"BOWLER",84,"RCB"],
-  ["Krunal Pandya","India",0,"ALL_ROUNDER",80,"RCB"],["Rasikh Salam","India",0,"BOWLER",76,"RCB"],
+  ["Krunal Pandya","India",0,"ALL_ROUNDER",80,"RCB"],
   ["Suyash Sharma","India",0,"BOWLER",75,"RCB"],["Jacob Bethell","England",1,"ALL_ROUNDER",78,"RCB"],
-  ["Devdutt Padikkal","India",0,"BATTER",79,"RCB"],["Swastik Chikara","India",0,"BATTER",71,"RCB"],
-  ["Manoj Bhandage","India",0,"ALL_ROUNDER",72,"RCB"],["Swapnil Singh","India",0,"ALL_ROUNDER",73,"RCB"],
+  ["Devdutt Padikkal","India",0,"BATTER",79,"RCB"],
   ["Tim David","Australia",1,"BATTER",82,"RCB"],["Romario Shepherd","West Indies",1,"ALL_ROUNDER",78,"RCB"],
   ["Nuwan Thushara","Sri Lanka",1,"BOWLER",77,"RCB"],["Lungi Ngidi","South Africa",1,"BOWLER",79,"RCB"],
-  ["Abhinandan Singh","India",0,"BOWLER",70,"RCB"],["Mohit Rathee","India",0,"BOWLER",69,"RCB"],
-  ["Yash Rathod","India",0,"BATTER",71,"RCB"],["Rasikh Dar","India",0,"BOWLER",74,"RCB"],
-  ["Kedar Jadhav","India",0,"BATTER",73,"RCB"],
   // MI (51-75)
   ["Jasprit Bumrah","India",0,"BOWLER",98,"MI"],["Suryakumar Yadav","India",0,"BATTER",93,"MI"],
   ["Hardik Pandya","India",0,"ALL_ROUNDER",91,"MI"],["Rohit Sharma","India",0,"BATTER",92,"MI"],
   ["Tilak Varma","India",0,"BATTER",85,"MI"],["Trent Boult","New Zealand",1,"BOWLER",91,"MI"],
-  ["Naman Dhir","India",0,"ALL_ROUNDER",77,"MI"],["Robin Minz","India",0,"WICKETKEEPER",74,"MI"],
+  ["Naman Dhir","India",0,"ALL_ROUNDER",77,"MI"],
   ["Karn Sharma","India",0,"BOWLER",76,"MI"],["Ryan Rickelton","South Africa",1,"WICKETKEEPER",80,"MI"],
   ["Will Jacks","England",1,"ALL_ROUNDER",82,"MI"],["Mitchell Santner","New Zealand",1,"ALL_ROUNDER",81,"MI"],
-  ["Reece Topley","England",1,"BOWLER",80,"MI"],["Krishnan Shrijith","India",0,"WICKETKEEPER",72,"MI"],
-  ["Ashwani Kumar","India",0,"BOWLER",70,"MI"],["Allah Ghazanfar","Afghanistan",1,"BOWLER",76,"MI"],
-  ["Raj Angad Bawa","India",0,"ALL_ROUNDER",73,"MI"],["Satyanarayana Raju","India",0,"BOWLER",70,"MI"],
-  ["Bevon Jacobs","New Zealand",1,"BATTER",72,"MI"],["Vignesh Puthur","India",0,"BOWLER",69,"MI"],
   ["Deepak Chahar","India",0,"BOWLER",79,"MI"],["Liton Das","Bangladesh",1,"WICKETKEEPER",75,"MI"],
-  ["Arjun Tendulkar","India",0,"ALL_ROUNDER",71,"MI"],["Kumar Kartikeya","India",0,"BOWLER",73,"MI"],
-  ["Piyush Chawla","India",0,"BOWLER",78,"MI"],
   // SRH (76-100)
   ["Heinrich Klaasen","South Africa",1,"WICKETKEEPER",92,"SRH"],["Pat Cummins","Australia",1,"ALL_ROUNDER",91,"SRH"],
   ["Abhishek Sharma","India",0,"ALL_ROUNDER",88,"SRH"],["Travis Head","Australia",1,"BATTER",92,"SRH"],
   ["Nitish Kumar Reddy","India",0,"ALL_ROUNDER",83,"SRH"],["Ishan Kishan","India",0,"WICKETKEEPER",85,"SRH"],
   ["Mohammed Shami","India",0,"BOWLER",90,"SRH"],["Harshal Patel","India",0,"BOWLER",83,"SRH"],
-  ["Rahul Chahar","India",0,"BOWLER",79,"SRH"],["Adam Zampa","Australia",1,"BOWLER",84,"SRH"],
-  ["Atharva Taide","India",0,"BATTER",75,"SRH"],["Abhinav Manohar","India",0,"BATTER",76,"SRH"],
-  ["Simarjeet Singh","India",0,"BOWLER",74,"SRH"],["Zeeshan Ansari","India",0,"BOWLER",71,"SRH"],
-  ["Jaydev Unadkat","India",0,"BOWLER",76,"SRH"],["Eshan Malinga","Sri Lanka",1,"BOWLER",75,"SRH"],
-  ["Brydon Carse","England",1,"ALL_ROUNDER",77,"SRH"],["Kamindu Mendis","Sri Lanka",1,"ALL_ROUNDER",78,"SRH"],
-  ["Aniket Verma","India",0,"BATTER",70,"SRH"],["Smaran R","India",0,"BATTER",71,"SRH"],
-  ["Harvik Desai","India",0,"WICKETKEEPER",72,"SRH"],["Glenn Phillips","New Zealand",1,"ALL_ROUNDER",82,"SRH"],
+  ["Rahul Chahar","India",0,"BOWLER",79,"SRH"],["Adam Zampa","Australia",1,"BOWLER",84,"SRH"],,["Glenn Phillips","New Zealand",1,"ALL_ROUNDER",82,"SRH"],
   ["Washington Sundar","India",0,"ALL_ROUNDER",79,"SRH"],["Mayank Agarwal","India",0,"BATTER",76,"SRH"],
-  ["Umran Malik","India",0,"BOWLER",77,"SRH"],
   // KKR (101-125)
   ["Rinku Singh","India",0,"BATTER",88,"KKR"],["Varun Chakaravarthy","India",0,"BOWLER",89,"KKR"],
   ["Sunil Narine","West Indies",1,"ALL_ROUNDER",91,"KKR"],["Andre Russell","West Indies",1,"ALL_ROUNDER",91,"KKR"],
@@ -341,81 +325,45 @@ const RAW_PLAYERS = [
   ["Vaibhav Arora","India",0,"BOWLER",77,"KKR"],["Mayank Markande","India",0,"BOWLER",76,"KKR"],
   ["Rahmanullah Gurbaz","Afghanistan",1,"WICKETKEEPER",81,"KKR"],["Ajinkya Rahane","India",0,"BATTER",79,"KKR"],
   ["Rovman Powell","West Indies",1,"BATTER",80,"KKR"],["Spencer Johnson","Australia",1,"BOWLER",79,"KKR"],
-  ["Manish Pandey","India",0,"BATTER",75,"KKR"],["Luvnith Sisodia","India",0,"WICKETKEEPER",71,"KKR"],
-  ["Anukul Roy","India",0,"ALL_ROUNDER",74,"KKR"],["Moeen Ali","England",1,"ALL_ROUNDER",80,"KKR"],
-  ["Umran Malik","India",0,"BOWLER",76,"KKR"],["Chetan Sakariya","India",0,"BOWLER",74,"KKR"],
-  ["Sakib Hussain","India",0,"BOWLER",70,"KKR"],["Jason Roy","England",1,"BATTER",81,"KKR"],
   ["Suyash Sharma","India",0,"BOWLER",75,"KKR"],
   // DC (126-150)
   ["Axar Patel","India",0,"ALL_ROUNDER",89,"DC"],["Kuldeep Yadav","India",0,"BOWLER",90,"DC"],
   ["Tristan Stubbs","South Africa",1,"BATTER",87,"DC"],["Abishek Porel","India",0,"WICKETKEEPER",80,"DC"],
   ["KL Rahul","India",0,"WICKETKEEPER",90,"DC"],["Mitchell Starc","Australia",1,"BOWLER",92,"DC"],
-  ["T Natarajan","India",0,"BOWLER",82,"DC"],["Mukesh Kumar","India",0,"BOWLER",79,"DC"],
+  ["T Natarajan","India",0,"BOWLER",82,"DC"],
   ["Harry Brook","England",1,"BATTER",84,"DC"],["Faf du Plessis","South Africa",1,"BATTER",86,"DC"],
   ["Jake Fraser-McGurk","Australia",1,"BATTER",88,"DC"],["Sameer Rizvi","India",0,"BATTER",76,"DC"],
-  ["Ashutosh Sharma","India",0,"BATTER",81,"DC"],["Mohit Sharma","India",0,"BOWLER",79,"DC"],
-  ["Dushmantha Chameera","Sri Lanka",1,"BOWLER",77,"DC"],["Karun Nair","India",0,"BATTER",75,"DC"],
-  ["Donovan Ferreira","South Africa",1,"ALL_ROUNDER",76,"DC"],["Vipraj Nigam","India",0,"ALL_ROUNDER",72,"DC"],
-  ["Madhav Tiwari","India",0,"BOWLER",70,"DC"],["Tripurana Vijay","India",0,"BOWLER",69,"DC"],
-  ["Ajay Mandal","India",0,"ALL_ROUNDER",71,"DC"],["Manvanth Kumar","India",0,"ALL_ROUNDER",70,"DC"],
-  ["Lungi Ngidi","South Africa",1,"BOWLER",78,"DC"],["Praveen Dubey","India",0,"BOWLER",72,"DC"],
-  ["Vicky Ostwal","India",0,"BOWLER",71,"DC"],
   // RR (151-175)
   ["Sanju Samson","India",0,"WICKETKEEPER",90,"RR"],["Yashasvi Jaiswal","India",0,"BATTER",92,"RR"],
   ["Riyan Parag","India",0,"ALL_ROUNDER",85,"RR"],["Dhruv Jurel","India",0,"WICKETKEEPER",82,"RR"],
   ["Shimron Hetmyer","West Indies",1,"BATTER",83,"RR"],["Sandeep Sharma","India",0,"BOWLER",83,"RR"],
-  ["Jofra Archer","England",1,"BOWLER",89,"RR"],["Maheesh Theekshana","Sri Lanka",1,"BOWLER",82,"RR"],
-  ["Wanindu Hasaranga","Sri Lanka",1,"ALL_ROUNDER",86,"RR"],["Akash Madhwal","India",0,"BOWLER",78,"RR"],
-  ["Kumar Kartikeya","India",0,"BOWLER",74,"RR"],["Nitish Rana","India",0,"BATTER",82,"RR"],
-  ["Tushar Deshpande","India",0,"BOWLER",79,"RR"],["Shubham Dubey","India",0,"BATTER",74,"RR"],
-  ["Fazalhaq Farooqi","Afghanistan",1,"BOWLER",78,"RR"],["Vaibhav Suryavanshi","India",0,"BATTER",73,"RR"],
-  ["Kunal Singh Rathore","India",0,"WICKETKEEPER",71,"RR"],["Ashok Sharma","India",0,"BOWLER",70,"RR"],
-  ["Yudhvir Singh","India",0,"BOWLER",72,"RR"],["Kwena Maphaka","South Africa",1,"BOWLER",76,"RR"],
-  ["Navdeep Saini","India",0,"BOWLER",74,"RR"],["Joe Root","England",1,"BATTER",83,"RR"],
-  ["Murugan Ashwin","India",0,"BOWLER",73,"RR"],["KM Asif","India",0,"BOWLER",72,"RR"],
+  ["Jofra Archer","England",1,"BOWLER",89,"RR"],["Maheesh Theekshana","Sri Lanka",1,"BOWLER",82,"RR"],["Nitish Rana","India",0,"BATTER",82,"RR"],
+  ["Tushar Deshpande","India",0,"BOWLER",79,"RR"],["Vaibhav Suryavanshi","India",0,"BATTER",73,"RR"],["Joe Root","England",1,"BATTER",83,"RR"],
   ["Donovan Ferreira","South Africa",1,"BATTER",75,"RR"],
   // PBKS (176-200)
   ["Shashank Singh","India",0,"BATTER",84,"PBKS"],["Prabhsimran Singh","India",0,"WICKETKEEPER",82,"PBKS"],
   ["Shreyas Iyer","India",0,"BATTER",89,"PBKS"],["Yuzvendra Chahal","India",0,"BOWLER",88,"PBKS"],
   ["Arshdeep Singh","India",0,"BOWLER",88,"PBKS"],["Marcus Stoinis","Australia",1,"ALL_ROUNDER",86,"PBKS"],
   ["Glenn Maxwell","Australia",1,"ALL_ROUNDER",88,"PBKS"],["Nehal Wadhera","India",0,"BATTER",80,"PBKS"],
-  ["Harpreet Brar","India",0,"ALL_ROUNDER",79,"PBKS"],["Vishnu Vinod","India",0,"WICKETKEEPER",74,"PBKS"],
+  ["Harpreet Brar","India",0,"ALL_ROUNDER",79,"PBKS"],
   ["Marco Jansen","South Africa",1,"ALL_ROUNDER",83,"PBKS"],["Vijaykumar Vyshak","India",0,"BOWLER",77,"PBKS"],
   ["Yash Thakur","India",0,"BOWLER",78,"PBKS"],["Lockie Ferguson","New Zealand",1,"BOWLER",82,"PBKS"],
-  ["Azmatullah Omarzai","Afghanistan",1,"ALL_ROUNDER",79,"PBKS"],["Aaron Hardie","Australia",1,"ALL_ROUNDER",78,"PBKS"],
-  ["Xavier Bartlett","Australia",1,"BOWLER",77,"PBKS"],["Kuldeep Sen","India",0,"BOWLER",73,"PBKS"],
-  ["Priyansh Arya","India",0,"BATTER",73,"PBKS"],["Pravin Dubey","India",0,"BOWLER",72,"PBKS"],
-  ["Musheer Khan","India",0,"ALL_ROUNDER",75,"PBKS"],["Suryansh Shedge","India",0,"ALL_ROUNDER",71,"PBKS"],
-  ["Harpreet Singh","India",0,"BATTER",73,"PBKS"],["Vidwath Kaverappa","India",0,"BOWLER",74,"PBKS"],
-  ["Shivam Singh","India",0,"BATTER",70,"PBKS"],
+  ["Azmatullah Omarzai","Afghanistan",1,"ALL_ROUNDER",79,"PBKS"],
+  ["Xavier Bartlett","Australia",1,"BOWLER",77,"PBKS"],
+  ["Priyansh Arya","India",0,"BATTER",73,"PBKS"],["Suryansh Shedge","India",0,"ALL_ROUNDER",71,"PBKS"],
   // GT (201-225)
   ["Shubman Gill","India",0,"BATTER",93,"GT"],["Rashid Khan","Afghanistan",1,"ALL_ROUNDER",94,"GT"],
   ["Sai Sudharsan","India",0,"BATTER",87,"GT"],["Rahul Tewatia","India",0,"ALL_ROUNDER",79,"GT"],
   ["Shahrukh Khan","India",0,"ALL_ROUNDER",78,"GT"],["Jos Buttler","England",1,"WICKETKEEPER",93,"GT"],
   ["Kagiso Rabada","South Africa",1,"BOWLER",91,"GT"],["Mohammed Siraj","India",0,"BOWLER",88,"GT"],
-  ["Prasidh Krishna","India",0,"BOWLER",80,"GT"],["Nishant Sindhu","India",0,"ALL_ROUNDER",74,"GT"],
-  ["Mahipal Lomror","India",0,"ALL_ROUNDER",76,"GT"],["Kumar Kushagra","India",0,"WICKETKEEPER",73,"GT"],
-  ["Anuj Rawat","India",0,"WICKETKEEPER",74,"GT"],["Manav Suthar","India",0,"BOWLER",72,"GT"],
-  ["Washington Sundar","India",0,"ALL_ROUNDER",80,"GT"],["Gerald Coetzee","South Africa",1,"BOWLER",81,"GT"],
-  ["Karim Janat","Afghanistan",1,"ALL_ROUNDER",75,"GT"],["Gurnoor Brar","India",0,"BOWLER",71,"GT"],
-  ["Arshad Khan","India",0,"ALL_ROUNDER",73,"GT"],["Jayant Yadav","India",0,"ALL_ROUNDER",74,"GT"],
-  ["Ishant Sharma","India",0,"BOWLER",76,"GT"],["Dasun Shanaka","Sri Lanka",1,"ALL_ROUNDER",76,"GT"],
-  ["Odeam Smith","West Indies",1,"ALL_ROUNDER",74,"GT"],["Pradeep Sangwan","India",0,"BOWLER",71,"GT"],
-  ["Yash Dayal","India",0,"BOWLER",75,"GT"],
+  ["Prasidh Krishna","India",0,"BOWLER",80,"GT"],["Manav Suthar","India",0,"BOWLER",72,"GT"],["Gurnoor Brar","India",0,"BOWLER",71,"GT"],
   // LSG (226-250)
-  ["Nicholas Pooran","West Indies",1,"WICKETKEEPER",90,"LSG"],["Mayank Yadav","India",0,"BOWLER",86,"LSG"],
+  ["Nicholas Pooran","West Indies",1,"WICKETKEEPER",90,"LSG"],
   ["Ravi Bishnoi","India",0,"BOWLER",86,"LSG"],["Mohsin Khan","India",0,"BOWLER",80,"LSG"],
   ["Ayush Badoni","India",0,"BATTER",80,"LSG"],["Rishabh Pant","India",0,"WICKETKEEPER",92,"LSG"],
   ["David Miller","South Africa",1,"BATTER",86,"LSG"],["Aiden Markram","South Africa",1,"BATTER",84,"LSG"],
-  ["Mitchell Marsh","Australia",1,"ALL_ROUNDER",83,"LSG"],["Avesh Khan","India",0,"BOWLER",81,"LSG"],
-  ["Abdul Samad","India",0,"ALL_ROUNDER",76,"LSG"],["Shahbaz Ahmed","India",0,"ALL_ROUNDER",75,"LSG"],
-  ["Akash Deep","India",0,"BOWLER",79,"LSG"],["Himmat Singh","India",0,"BATTER",72,"LSG"],
-  ["Shamar Joseph","West Indies",1,"BOWLER",78,"LSG"],["Prince Yadav","India",0,"BOWLER",70,"LSG"],
-  ["M Siddharth","India",0,"BOWLER",73,"LSG"],["Digvesh Singh","India",0,"BOWLER",69,"LSG"],
-  ["Arshin Kulkarni","India",0,"ALL_ROUNDER",74,"LSG"],["Yudhir Singh","India",0,"BOWLER",71,"LSG"],
-  ["Matthew Breetzke","South Africa",1,"BATTER",75,"LSG"],["Amit Mishra","India",0,"BOWLER",74,"LSG"],
-  ["Krishnappa Gowtham","India",0,"ALL_ROUNDER",74,"LSG"],["Kyle Mayers","West Indies",1,"ALL_ROUNDER",80,"LSG"],
-  ["Prerak Mankad","India",0,"ALL_ROUNDER",72,"LSG"]
+  ["Mitchell Marsh","Australia",1,"ALL_ROUNDER",83,"LSG"],
+  ["Akash Deep","India",0,"BOWLER",79,"LSG"],["Prince Yadav","India",0,"BOWLER",70,"LSG"],["Digvesh Singh","India",0,"BOWLER",69,"LSG"],
 ];
 
 const PLAYERS = RAW_PLAYERS.map((p,i)=>({
@@ -649,7 +597,7 @@ function advanceToNextPlayer(st){
   }
   pool.status="inAuction";
   a.currentPlayerId=pid; a.currentBid=pool.basePrice; a.currentBidderId=null;
-  a.endsAt = Date.now()+20000; a.status="live";
+  a.endsAt = Date.now()+10000; a.status="live";
   st.history.unshift({type:"enter",playerId:pid,name:pool.name,time:Date.now()});
   return st;
 }
@@ -662,7 +610,7 @@ function advanceToNextPlayer2(st){
     if(pool && pool.status==="available"){
       pool.status="inAuction";
       a.currentPlayerId=pid; a.currentBid=pool.basePrice; a.currentBidderId=null;
-      a.endsAt=Date.now()+20000; a.status="live";
+      a.endsAt=Date.now()+10000; a.status="live";
       st.history.unshift({type:"enter",playerId:pid,name:pool.name,time:Date.now()});
       return st;
     }
@@ -777,8 +725,11 @@ async function actionPlaceBid(){
     if(!chk.ok) return false;
     if(mgr.id===a.currentBidderId) return false; // can't outbid yourself
     a.currentBid = amt; a.currentBidderId = mgr.id;
-    a.endsAt = Date.now()+20000;
-    st.bidFeed.unshift({manager:mgr.name,team:mgr.team,amount:amt,time:Date.now()});
+    const now = Date.now();
+    const curEnd = a.endsAt || (now + 10000);
+    // Add +1s on every bid, strictly capped at 10 seconds (now + 10000ms)
+    a.endsAt = Math.min(now + 10000, curEnd + 1000);
+    st.bidFeed.unshift({manager:mgr.name,team:mgr.team,amount:amt,time:now});
     st.bidFeed = st.bidFeed.slice(0,40);
     return st;
   });
@@ -1167,6 +1118,14 @@ function renderRetention(){
 
   document.getElementById("retSearch").oninput=(e)=>{S._retSearch=e.target.value;render();};
   document.getElementById("retRole").onchange=(e)=>{S._retRole=e.target.value;render();};
+
+  // Preserve scroll position
+  const pgrid = document.querySelector(".pgrid-scroll");
+  if(pgrid){
+    if(S._retScrollTop !== undefined) pgrid.scrollTop = S._retScrollTop;
+    pgrid.onscroll = (e) => { S._retScrollTop = e.target.scrollTop; };
+  }
+
   document.querySelectorAll("[data-retain]").forEach(el=>{
     el.onclick=()=>actionRetainPlayer(el.dataset.retain);
   });
@@ -1205,6 +1164,18 @@ function renderAuction(){
   const sold = r.pool.filter(p=>p.status==="sold").length;
   const unsold = r.pool.filter(p=>p.status==="unsold").length;
   const available = r.pool.filter(p=>p.status==="available"||p.status==="inAuction").length;
+
+  // Filter pool for live side panel search
+  const aucSearchQ = (S._aucPoolSearch || "").trim().toLowerCase();
+  let aucPoolList = r.pool;
+  if(aucSearchQ){
+    aucPoolList = aucPoolList.filter(p =>
+      p.name.toLowerCase().includes(aucSearchQ) ||
+      p.country.toLowerCase().includes(aucSearchQ) ||
+      (p.team2025 || "").toLowerCase().includes(aucSearchQ) ||
+      (ROLE_LABEL[p.role] || "").toLowerCase().includes(aucSearchQ)
+    );
+  }
 
   if(a.status==="roundEnd"){
     const unsoldPlayers = r.pool.filter(p=>p.status==="unsold");
@@ -1264,11 +1235,34 @@ function renderAuction(){
             <div class="mini-bar"><div class="fill" style="width:${(m.purse/START_PURSE)*100}%;"></div></div>
           </div>`;
         }).join("")}
-        <div class="section-title" style="margin-top:18px;">Player Pool</div>
+        <div class="section-title" style="margin-top:18px;">Player Pool Summary</div>
         <div class="stat-row" style="gap:8px;">
           <div class="stat-box" style="min-width:70px;padding:9px;"><div class="num" style="font-size:16px;">${totalPool}</div><div class="lbl">Total</div></div>
           <div class="stat-box" style="min-width:70px;padding:9px;"><div class="num" style="font-size:16px;">${sold}</div><div class="lbl">Sold</div></div>
           <div class="stat-box" style="min-width:70px;padding:9px;"><div class="num" style="font-size:16px;">${unsold}</div><div class="lbl">Unsold</div></div>
+        </div>
+
+        <div class="section-title" style="margin-top:18px;display:flex;justify-content:space-between;align-items:center;">
+          <span>All Players (${r.pool.length})</span>
+        </div>
+        <input type="text" id="aucPoolSearch" placeholder="Filter pool player..." value="${S._aucPoolSearch || ''}" style="width:100%;margin-bottom:8px;padding:7px 10px;font-size:12px;background:#161c28;border:1px solid var(--glass-brd);border-radius:8px;color:#fff;" />
+        <div class="side-pool-list pgrid-scroll" style="max-height:260px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:10px;padding:6px;border:1px solid var(--glass-brd);">
+          ${aucPoolList.map(p => {
+            let badgeStyle = "background:rgba(79,209,255,0.15);color:var(--flood);";
+            let statusLabel = "Available";
+            if(p.status === "inAuction") { badgeStyle="background:rgba(232,185,74,0.2);color:var(--gold-2);"; statusLabel="In Auction"; }
+            else if(p.status === "retained") { badgeStyle="background:rgba(232,185,74,0.18);color:var(--gold-2);"; statusLabel="Retained"; }
+            else if(p.status === "sold") { badgeStyle="background:rgba(61,220,132,0.18);color:var(--good);"; statusLabel=`Sold ${fmtCr(p.price)}`; }
+            else if(p.status === "unsold") { badgeStyle="background:rgba(239,74,95,0.18);color:var(--danger);"; statusLabel="Unsold"; }
+            
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:11.5px;">
+              <div>
+                <div style="font-weight:700;color:var(--ink);">${flag(p.country)} ${p.name}</div>
+                <div style="font-size:10px;color:var(--ink-faint);">${ROLE_LABEL[p.role]} · Base ${fmtCr(p.basePrice)}</div>
+              </div>
+              <span style="font-size:9px;font-weight:800;letter-spacing:0.5px;padding:2px 6px;border-radius:4px;white-space:nowrap;${badgeStyle}">${statusLabel}</span>
+            </div>`;
+          }).join("") || '<div class="empty-state" style="padding:10px;">No player found.</div>'}
         </div>
       </div>
 
@@ -1345,6 +1339,14 @@ function renderAuction(){
       </div>
     </div>
   </div>`;
+
+  const aucSearch = document.getElementById("aucPoolSearch");
+  if(aucSearch){
+    aucSearch.oninput = (e) => {
+      S._aucPoolSearch = e.target.value;
+      render();
+    };
+  }
 
   const bBid=document.getElementById("btnBid"); if(bBid) bBid.onclick=actionPlaceBid;
   const bSkip=document.getElementById("btnSkip"); if(bSkip) bSkip.onclick=actionHostSkip;

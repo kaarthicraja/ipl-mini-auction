@@ -469,6 +469,20 @@ async function saveRoom(code, state){
 }
 // Phase ordering for regression guard
 const PHASE_ORDER = {lobby:0, teamselect:1, retention:2, auction:3, results:4};
+
+// Strip any null/undefined entries from pool, managers, and squads
+function sanitizeState(st){
+  if(!st) return st;
+  if(Array.isArray(st.pool)) st.pool = st.pool.filter(p=>p!=null);
+  if(Array.isArray(st.managers)){
+    st.managers = st.managers.filter(m=>m!=null);
+    st.managers.forEach(m=>{
+      if(Array.isArray(m.squad)) m.squad = m.squad.filter(s=>s!=null);
+    });
+  }
+  return st;
+}
+
 // read-modify-write helper to shrink race window
 async function mutateRoom(code, mutator){
   // Use whichever is newer: server or local
@@ -481,11 +495,14 @@ async function mutateRoom(code, mutator){
     if(localVersion > serverVersion) cur = S.room; // local is newer
   }
   if(!cur) return null;
-  const next = mutator(JSON.parse(JSON.stringify(cur)));
+  // Sanitize before cloning so mutator never sees nulls
+  const clone = sanitizeState(JSON.parse(JSON.stringify(cur)));
+  const next = mutator(clone);
   if(next===false) return cur; // mutator aborted
+  sanitizeState(next); // sanitize result too
   await saveRoom(code, next);
   if(S.roomCode===code){
-    S.room = next;
+    S.room = sanitizeState(next);
     render();
   }
   return next;
@@ -557,7 +574,7 @@ function startPolling(){
         // Never regress phase
         if(!S.room || newPhaseOrder >= currentPhaseOrder){
           const changed = !S.room || r.phase !== S.room.phase || newVersion !== currentVersion;
-          S.room = r;
+          S.room = sanitizeState(r);
           if(changed) render();
         }
       }

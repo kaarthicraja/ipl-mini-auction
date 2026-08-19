@@ -431,13 +431,19 @@ function formatTimer(ms){
    has one authoritative shared source of truth. */
 const HAS_ARTIFACT_STORAGE = (typeof window !== "undefined") && !!window.storage;
 
+// Fetch with timeout to avoid hanging on slow servers
+function fetchWithTimeout(url, opts, ms=8000){
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), ms);
+  return fetch(url, {...opts, signal:ctrl.signal}).finally(()=>clearTimeout(timer));
+}
 async function loadRoom(code){
   try{
     if(HAS_ARTIFACT_STORAGE){
       const r = await window.storage.get("room:"+code, true);
       return r ? JSON.parse(r.value) : null;
     } else {
-      const res = await fetch("/api/room/"+encodeURIComponent(code));
+      const res = await fetchWithTimeout("/api/room/"+encodeURIComponent(code), {});
       if(!res.ok) return null;
       const data = await res.json();
       return data && data.value ? JSON.parse(data.value) : null;
@@ -451,7 +457,7 @@ async function saveRoom(code, state){
     if(HAS_ARTIFACT_STORAGE){
       await window.storage.set("room:"+code, JSON.stringify(state), true);
     } else {
-      const res = await fetch("/api/room/"+encodeURIComponent(code), {
+      const res = await fetchWithTimeout("/api/room/"+encodeURIComponent(code), {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({value: JSON.stringify(state)})
@@ -741,8 +747,11 @@ async function actionPickTeam(teamId){
   if(S.room) maybeAutoAdvanceTeamSelect(S.room);
 }
 async function actionStartRetention(){
-  // Optimistic local render so UI feels instant
-  if(S.room && S.room.phase !== "retention"){
+  if(!S.room) return;
+
+  // ---- STEP 1: Optimistic render (synchronous, no await) ----
+  // Do this BEFORE any network calls so UI responds instantly
+  if(S.room.phase !== "retention"){
     if(!S.room.teamsTaken) S.room.teamsTaken = {};
     const takenIds = new Set(Object.keys(S.room.teamsTaken));
     const availTeams = TEAMS.filter(t=>!takenIds.has(t.id)).map(t=>t.id);
@@ -754,25 +763,23 @@ async function actionStartRetention(){
       }
     });
     S.room.phase = "retention";
-    S.room.version = (S.room.version || 0) + 50; // ensure regression guard holds
-    render();
+    S.room.version = (S.room.version || 0) + 50; // regression guard
+    render(); // shows Retention page immediately
   }
-  // Authoritative server write
-  await mutateRoom(S.roomCode, st=>{
-    if(st.phase === "retention") return st; // already done, just sync
-    if(!st.teamsTaken) st.teamsTaken = {};
-    const takenIds = new Set(Object.keys(st.teamsTaken));
-    const availTeams = TEAMS.filter(t=>!takenIds.has(t.id)).map(t=>t.id);
-    st.managers.forEach(m=>{
-      if(!m.team && availTeams.length > 0){
-        const t = availTeams.shift();
-        m.team = t;
-        st.teamsTaken[t] = m.id;
-      }
-    });
-    st.phase = "retention";
-    return st;
-  });
+
+  // ---- STEP 2: Server write (async, background) ----
+  // We snapshot what we want to save before the await
+  const snapshot = JSON.parse(JSON.stringify(S.room));
+  try{
+    await saveRoom(S.roomCode, snapshot);
+    // Sync S.room with the saved snapshot (saveRoom bumps version)
+    if(S.roomCode){
+      S.room = snapshot;
+    }
+  } catch(e){
+    console.error("Save retention failed:", e);
+    // Page already shows Retention; server will catch up on next poll
+  }
 }
 async function actionRetainPlayer(playerId){
   await mutateRoom(S.roomCode, st=>{
@@ -1165,10 +1172,10 @@ function renderTeamSelect(){
   // Wire Start Retention button
   const btnStartRet = document.getElementById("btnStartRet");
   if(btnStartRet && !btnStartRet.disabled){
-    btnStartRet.onclick = async function(){
-      btnStartRet.disabled = true;
-      btnStartRet.textContent = "Starting…";
-      await actionStartRetention();
+    btnStartRet.onclick = function(){
+      // actionStartRetention renders synchronously first (no await needed here)
+      // The page transitions to Retention immediately, server write happens in background
+      actionStartRetention();
     };
   }
 }

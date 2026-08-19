@@ -744,7 +744,8 @@ async function actionPickTeam(teamId){
     m.team = teamId; st.teamsTaken[teamId]=m.id;
     return st;
   });
-  if(S.room) maybeAutoAdvanceTeamSelect(S.room);
+  // NOTE: do NOT call maybeAutoAdvanceTeamSelect here — it causes nested renders/crashes.
+  // The poll loop handles auto-advance safely every 400ms.
 }
 async function actionStartRetention(){
   if(!S.room) return;
@@ -1187,19 +1188,23 @@ function renderRetention(){
   const r=S.room; const me=myManager();
   const meTeamId = (me && me.team) ? me.team : TEAMS[0].id;
   const meTeamObj = teamById(meTeamId) || TEAMS[0];
-  const myRetained = me ? me.squad.filter(s=>s.retained) : [];
-  const doneCount = r.managers.filter(m=>m.squad.filter(s=>s.retained).length>=RETENTION_SLOTS).length;
-  const allDone = doneCount===r.managers.length;
+  const myRetained = (me && Array.isArray(me.squad)) ? me.squad.filter(s=>s.retained) : [];
+  const managers = Array.isArray(r.managers) ? r.managers.filter(m=>m!=null) : [];
+  const doneCount = managers.filter(m=>(Array.isArray(m.squad)?m.squad.filter(s=>s.retained).length:0)>=RETENTION_SLOTS).length;
+  const allDone = doneCount===managers.length;
   const roleFilter = S._retRole||"ALL";
   const searchQ = (S._retSearch||"").trim().toLowerCase();
   
+  // Defensive: filter out any null/undefined pool entries first
+  const pool = Array.isArray(r.pool) ? r.pool.filter(p=>p!=null) : [];
+
   // Filter available pool to ONLY players belonging to meTeamId (2025 team lock)
-  let avail = r.pool.filter(p=>p.status==="available" && (!p.team2025 || p.team2025===meTeamId));
+  let avail = pool.filter(p=>p.status==="available" && (!p.team2025 || p.team2025===meTeamId));
   if(roleFilter!=="ALL") avail = avail.filter(p=>p.role===roleFilter);
   if(searchQ) avail = avail.filter(p=>
-    p.name.toLowerCase().includes(searchQ) ||
-    p.country.toLowerCase().includes(searchQ) ||
-    (ROLE_LABEL[p.role]||"").toLowerCase().includes(searchQ)
+    (p.name||'').toLowerCase().includes(searchQ) ||
+    (p.country||'').toLowerCase().includes(searchQ) ||
+    (ROLE_LABEL[p.role]||'').toLowerCase().includes(searchQ)
   );
   avail = avail.slice(0,60);
 
@@ -1242,8 +1247,8 @@ function renderRetention(){
 
     <div class="card" style="margin-top:16px;">
       <div class="section-title">Retention Progress</div>
-      ${r.managers.map(m=>`<div class="player-row"><div class="left"><span class="dot ${isConnected(m)?'on':'off'}"></span>${m.name} <span class="faint">(${m.team||'None'})</span></div>
-        <div class="mono" style="font-weight:700;color:${m.squad.filter(s=>s.retained).length>=3?'#3ddc84':'#9aa5b4'};">${m.squad.filter(s=>s.retained).length}/3</div></div>`).join("")}
+      ${managers.map(m=>`<div class="player-row"><div class="left"><span class="dot ${isConnected(m)?'on':'off'}"></span>${m.name} <span class="faint">(${m.team||'None'})</span></div>
+        <div class="mono" style="font-weight:700;color:${(Array.isArray(m.squad)?m.squad.filter(s=>s&&s.retained).length:0)>=3?'#3ddc84':'#9aa5b4'};">${Array.isArray(m.squad)?m.squad.filter(s=>s&&s.retained).length:0}/3</div></div>`).join("")}
       ${amHost()?`<button class="btn btn-gold btn-block" style="margin-top:14px;" id="btnStartAuc">Start Auction${allDone?'':' (can skip remaining)'}</button>`:''}
     </div>
   </div>`;

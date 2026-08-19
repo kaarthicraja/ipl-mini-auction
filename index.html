@@ -416,6 +416,13 @@ function flag(country){
   const map={India:"🇮🇳",Australia:"🇦🇺","South Africa":"🇿🇦",England:"🏴󠁧󠁢󠁥󠁮󠁧󠁿","New Zealand":"🇳🇿","West Indies":"🏝️",Afghanistan:"🇦🇫","Sri Lanka":"🇱🇰",Bangladesh:"🇧🇩"};
   return map[country]||"🏳️";
 }
+function formatTimer(ms){
+  if(!ms || ms <= 0) return "00:00";
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
 
 /* ---------------- Storage helpers ----------------
    Dual mode: if window.storage exists (Claude Artifacts runtime), use it.
@@ -454,9 +461,19 @@ async function saveRoom(code, state){
     return true;
   }catch(e){ console.error("save failed",e); return false; }
 }
+// Phase ordering for regression guard
+const PHASE_ORDER = {lobby:0, teamselect:1, retention:2, auction:3, results:4};
 // read-modify-write helper to shrink race window
 async function mutateRoom(code, mutator){
-  const cur = await loadRoom(code);
+  // Use whichever is newer: server or local
+  let cur = await loadRoom(code);
+  if(!cur){
+    cur = S.room;
+  } else if(S.room && S.roomCode === code){
+    const localVersion = S.room.version || 0;
+    const serverVersion = cur.version || 0;
+    if(localVersion > serverVersion) cur = S.room; // local is newer
+  }
   if(!cur) return null;
   const next = mutator(JSON.parse(JSON.stringify(cur)));
   if(next===false) return cur; // mutator aborted
@@ -519,10 +536,27 @@ function startPolling(){
     if(!S.roomCode) return;
     const r = await loadRoom(S.roomCode);
     if(r){
-      const changed = !S.room || r.version !== S.room.version;
-      S.room = r;
-      if(changed) render();
-      maybeAutoAdvanceAuction(r);
+      const currentVersion = S.room ? (S.room.version || 0) : -1;
+      const newVersion = r.version || 0;
+      const currentPhaseOrder = S.room ? (PHASE_ORDER[S.room.phase] || 0) : -1;
+      const newPhaseOrder = PHASE_ORDER[r.phase] || 0;
+
+      // Never regress the phase backwards (e.g. don't overwrite retention -> teamselect)
+      // Accept if: we have no state, server is newer version, or server phase is same/newer
+      const serverIsNewer = newVersion > currentVersion;
+      const phaseIsNewer = newPhaseOrder > currentPhaseOrder;
+      const samePhase = newPhaseOrder === currentPhaseOrder && newVersion >= currentVersion;
+
+      if(!S.room || serverIsNewer || phaseIsNewer || samePhase){
+        // Never regress phase
+        if(!S.room || newPhaseOrder >= currentPhaseOrder){
+          const changed = !S.room || r.phase !== S.room.phase || newVersion !== currentVersion;
+          S.room = r;
+          if(changed) render();
+        }
+      }
+      maybeAutoAdvanceTeamSelect(S.room);
+      maybeAutoAdvanceAuction(S.room);
     }
   }, 400);
   S.heartbeat = setInterval(async ()=>{
@@ -537,6 +571,24 @@ function startPolling(){
 function stopPolling(){ if(S.poll) clearInterval(S.poll); if(S.heartbeat) clearInterval(S.heartbeat); }
 
 function isConnected(m){ return (Date.now()-(m.lastSeen||0)) < 12000; }
+
+async function maybeAutoAdvanceTeamSelect(r){
+  if(!r || r.phase!=="teamselect") return;
+  if(S.autoAdvanceGuard) return;
+  const allPicked = r.managers.length > 0 && r.managers.every(m => !!m.team);
+  const now = Date.now();
+  const timeExpired = r.teamSelectEndsAt && now >= r.teamSelectEndsAt;
+  if(allPicked || timeExpired){
+    S.autoAdvanceGuard = true;
+    try {
+      await actionStartRetention();
+    } catch(err){
+      console.error("Auto-advance retention error:", err);
+    } finally {
+      S.autoAdvanceGuard = false;
+    }
+  }
+}
 
 /* Any client can drive the authoritative auction clock forward when it detects time has elapsed.
    Guarded so it's idempotent: mutator re-checks state right before writing. */
@@ -662,10 +714,23 @@ async function actionJoinRoom(code, name){
   startPolling(); render();
 }
 async function actionStartTeamSelect(){
-  await mutateRoom(S.roomCode, st=>{ if(st.managers.length<2) return false; st.phase="teamselect"; return st; });
+  const timerMs = 138 * 1000; // 2.3 minutes = 138 seconds
+  const endsAt = Date.now() + timerMs;
+  if(S.room){
+    S.room.phase = "teamselect";
+    S.room.teamSelectEndsAt = endsAt;
+    render();
+  }
+  await mutateRoom(S.roomCode, st=>{
+    if(st.managers.length<2) return false;
+    st.phase="teamselect";
+    st.teamSelectEndsAt = endsAt;
+    return st;
+  });
 }
 async function actionPickTeam(teamId){
   await mutateRoom(S.roomCode, st=>{
+    if(!st.teamsTaken) st.teamsTaken = {};
     if(st.teamsTaken[teamId]) return false;
     const m = st.managers.find(x=>x.id===S.myId);
     if(!m || m.team) return false;
@@ -673,10 +738,29 @@ async function actionPickTeam(teamId){
     m.team = teamId; st.teamsTaken[teamId]=m.id;
     return st;
   });
+  if(S.room) maybeAutoAdvanceTeamSelect(S.room);
 }
 async function actionStartRetention(){
+  if(S.room){
+    if(!S.room.teamsTaken) S.room.teamsTaken = {};
+    const taken = new Set(Object.values(S.room.teamsTaken||{}));
+    const availTeams = TEAMS.filter(t=>!taken.has(t.id)).map(t=>t.id);
+    S.room.managers.forEach(m=>{
+      if(!m.team && availTeams.length > 0){
+        const randTeam = availTeams.shift();
+        m.team = randTeam;
+        S.room.teamsTaken[randTeam] = m.id;
+      }
+    });
+    // Bump version locally FIRST so poll loop won't regress us back
+    S.room.version = (S.room.version || 0) + 100; 
+    S.room.phase="retention";
+    render();
+  }
   await mutateRoom(S.roomCode, st=>{
-    const taken = new Set(Object.values(st.teamsTaken));
+    if(st.phase === "retention") return st;
+    if(!st.teamsTaken) st.teamsTaken = {};
+    const taken = new Set(Object.values(st.teamsTaken||{}));
     const availTeams = TEAMS.filter(t=>!taken.has(t.id)).map(t=>t.id);
     st.managers.forEach(m=>{
       if(!m.team && availTeams.length > 0){
@@ -1014,14 +1098,22 @@ function renderLobby(){
    ============================================================ */
 function renderTeamSelect(){
   const r=S.room; const me=myManager();
-  const allPicked = r.managers.every(m=>m.team);
-  const hostHasTeam = me && me.team;
+  const allPicked = r.managers.length > 0 && r.managers.every(m=>m.team);
+  const endsAt = r.teamSelectEndsAt || (Date.now() + 138000);
+  const msLeft = Math.max(0, endsAt - Date.now());
+  const timerStr = formatTimer(msLeft);
+
   app.innerHTML = renderTopbar() + `
   <div class="main">
-    <div class="phase-pill">Team Selection</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+      <div class="phase-pill" style="margin:0;">Team Selection</div>
+      <div style="background:rgba(247,213,129,0.15);border:1px solid rgba(247,213,129,0.4);color:#f7d581;padding:6px 14px;border-radius:20px;font-weight:700;font-family:var(--font-mono);font-size:14px;display:flex;align-items:center;gap:6px;">
+        <span>⏳ Team Selection Timer:</span> <span id="teamSelTimerDisplay">${timerStr}</span>
+      </div>
+    </div>
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Pick your IPL team</div>
-      <div class="dim" style="font-size:13px;margin-bottom:14px;">${me&&me.team? "You're locked in. Waiting for the others…" : "Tap a team to claim it. Once picked, it's yours for the game."}</div>
+      <div class="dim" style="font-size:13px;margin-bottom:14px;">${me&&me.team? "You're locked in! Unpicked teams will be auto-assigned when timer expires or all managers pick." : "Tap a team to claim it within 2.3 minutes. Remaining teams will be auto-assigned."}</div>
       <div class="team-grid">
         ${TEAMS.map(t=>{
           const takenBy = r.teamsTaken[t.id];
@@ -1035,7 +1127,7 @@ function renderTeamSelect(){
               <div class="team-name">${t.name}</div>
             </div>
             <div class="team-status" style="color:${mine?'#f7d581':(takenBy?'#ff8a97':'#3ddc84')};">
-              ${mine?'✓ Selected': takenBy? '🔒 Taken by '+takenMgr.name : 'Available'}
+              ${mine?'✓ Selected': takenBy? '🔒 Taken by '+(takenMgr?takenMgr.name:'Manager') : 'Available'}
             </div>
           </div>`;
         }).join("")}
@@ -1045,7 +1137,9 @@ function renderTeamSelect(){
       <div class="section-title">Managers</div>
       ${r.managers.map(m=>`<div class="player-row"><div class="left"><span class="dot ${isConnected(m)?'on':'off'}"></span>${m.name}${m.id===S.myId?' <span class="tagpill tag-you">You</span>':''}</div>
         <div style="font-weight:700;color:${m.team?teamById(m.team).primary:'#5c6779'};">${m.team||'Choosing…'}</div></div>`).join("")}
-      ${amHost()?`<button class="btn btn-gold btn-block" style="margin-top:14px;" id="btnStartRet" ${hostHasTeam?'':'disabled'}>Start Retention${hostHasTeam?(allPicked?'':' (auto-assigns remaining teams)'):' (pick your team first)'}</button>`:''}
+      <div class="dim" style="margin-top:14px;text-align:center;font-size:12.5px;color:#f7d581;">
+        ⚡ Retention round starts automatically when timer expires or all teams are picked!
+      </div>
     </div>
   </div>`;
   document.querySelectorAll(".team-card").forEach(el=>{
@@ -1057,10 +1151,21 @@ function renderTeamSelect(){
       actionPickTeam(t);
     };
   });
-  const btnStartRet = document.getElementById("btnStartRet");
-  if(amHost() && btnStartRet && hostHasTeam) {
-    btnStartRet.onclick = actionStartRetention;
-  }
+  if(S._teamSelectTimer) clearInterval(S._teamSelectTimer);
+  S._teamSelectTimer = setInterval(()=>{
+    const el = document.getElementById("teamSelTimerDisplay");
+    if(!el || !S.room || S.room.phase !== "teamselect") {
+      clearInterval(S._teamSelectTimer);
+      return;
+    }
+    const ends = S.room.teamSelectEndsAt || Date.now();
+    const left = Math.max(0, ends - Date.now());
+    el.textContent = formatTimer(left);
+    if(left <= 0){
+      clearInterval(S._teamSelectTimer);
+      maybeAutoAdvanceTeamSelect(S.room);
+    }
+  }, 500);
 }
 
 /* ============================================================

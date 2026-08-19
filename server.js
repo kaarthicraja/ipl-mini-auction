@@ -12,12 +12,17 @@ app.use(express.json({ limit: "2mb" }));
 
 // In-memory room store: { CODE: { value: "<json string>", updatedAt } }
 const rooms = {};
+// SSE subscribers per room: { CODE: Set<express.Response> }
+const sseClients = {};
 
 // Basic cleanup: drop rooms untouched for 12 hours so memory doesn't grow forever.
 setInterval(() => {
   const cutoff = Date.now() - 12 * 60 * 60 * 1000;
   for (const code of Object.keys(rooms)) {
-    if (rooms[code].updatedAt < cutoff) delete rooms[code];
+    if (rooms[code].updatedAt < cutoff) {
+      delete rooms[code];
+      if (sseClients[code]) delete sseClients[code];
+    }
   }
 }, 60 * 60 * 1000);
 
@@ -28,6 +33,29 @@ app.get("/api/room/:code", (req, res) => {
   res.json({ value: r.value });
 });
 
+// SSE endpoint for instant real-time room updates (overcomes polling latency)
+app.get("/api/room/:code/events", (req, res) => {
+  const code = req.params.code.toUpperCase();
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  if (res.flushHeaders) res.flushHeaders();
+
+  if (!sseClients[code]) sseClients[code] = new Set();
+  sseClients[code].add(res);
+
+  if (rooms[code]) {
+    res.write(`data: ${JSON.stringify({ value: rooms[code].value })}\n\n`);
+  }
+
+  req.on("close", () => {
+    if (sseClients[code]) {
+      sseClients[code].delete(res);
+      if (sseClients[code].size === 0) delete sseClients[code];
+    }
+  });
+});
+
 app.post("/api/room/:code", (req, res) => {
   const code = req.params.code.toUpperCase();
   const { value } = req.body || {};
@@ -35,11 +63,22 @@ app.post("/api/room/:code", (req, res) => {
     return res.status(400).json({ error: "value (string) is required" });
   }
   rooms[code] = { value, updatedAt: Date.now() };
+
+  // Broadcast state update to all connected SSE clients immediately
+  if (sseClients[code]) {
+    const payload = `data: ${JSON.stringify({ value })}\n\n`;
+    for (const clientRes of sseClients[code]) {
+      clientRes.write(payload);
+    }
+  }
+
   res.json({ ok: true });
 });
 
 app.delete("/api/room/:code", (req, res) => {
-  delete rooms[req.params.code.toUpperCase()];
+  const code = req.params.code.toUpperCase();
+  delete rooms[code];
+  if (sseClients[code]) delete sseClients[code];
   res.json({ ok: true });
 });
 
